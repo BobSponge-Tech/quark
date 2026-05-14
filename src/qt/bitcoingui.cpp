@@ -58,6 +58,8 @@
 #include <QUrlQuery>
 #endif
 
+using namespace boost::placeholders;
+
 const QString BitcoinGUI::DEFAULT_WALLET = "~Default";
 
 BitcoinGUI::BitcoinGUI(const NetworkStyle *networkStyle, QWidget *parent) :

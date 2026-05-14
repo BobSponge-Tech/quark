@@ -6,8 +6,8 @@ SDK_PATH ?= $(BASEDIR)/SDKs
 NO_QT ?=
 NO_WALLET ?=
 NO_UPNP ?=
-USE_LINUX_STATIC_QT5 ?=
-FALLBACK_DOWNLOAD_PATH ?= https://bitcoincore.org/depends-sources
+AVX2 ?=
+FALLBACK_DOWNLOAD_PATH ?= https://depends.dogecoincore.org
 
 BUILD = $(shell ./config.guess)
 HOST ?= $(BUILD)
@@ -16,6 +16,8 @@ BASEDIR = $(CURDIR)
 HASH_LENGTH:=11
 DOWNLOAD_CONNECT_TIMEOUT:=10
 DOWNLOAD_RETRIES:=3
+HOST_ID_SALT ?= salt
+BUILD_ID_SALT ?= salt
 
 host:=$(BUILD)
 ifneq ($(HOST),)
@@ -74,13 +76,36 @@ include builders/$(build_os).mk
 include builders/default.mk
 include packages/packages.mk
 
-qt_packages_$(NO_QT) = $(qt_packages) $(qt_$(host_os)_packages)
-qt_native_packages_$(NO_QT) = $(qt_native_packages)
+build_id_string:=$(BUILD_ID_SALT)
+build_id_string+=$(shell $(build_CC) --version 2>/dev/null)
+build_id_string+=$(shell $(build_AR) --version 2>/dev/null)
+build_id_string+=$(shell $(build_CXX) --version 2>/dev/null)
+build_id_string+=$(shell $(build_RANLIB) --version 2>/dev/null)
+build_id_string+=$(shell $(build_STRIP) --version 2>/dev/null)
+
+$(host_arch)_$(host_os)_id_string:=$(HOST_ID_SALT)
+$(host_arch)_$(host_os)_id_string+=$(shell $(host_CC) --version 2>/dev/null)
+$(host_arch)_$(host_os)_id_string+=$(shell $(host_AR) --version 2>/dev/null)
+$(host_arch)_$(host_os)_id_string+=$(shell $(host_CXX) --version 2>/dev/null)
+$(host_arch)_$(host_os)_id_string+=$(shell $(host_RANLIB) --version 2>/dev/null)
+$(host_arch)_$(host_os)_id_string+=$(shell $(host_STRIP) --version 2>/dev/null)
+
+qt_packages_$(NO_QT) = $(qt_packages) $(qt_$(host_os)_packages) $(qt_$(host_arch)_$(host_os)_packages)
 wallet_packages_$(NO_WALLET) = $(wallet_packages)
 upnp_packages_$(NO_UPNP) = $(upnp_packages)
+avx2_packages_$(AVX2) = $(avx2_$(host_arch)_$(host_os)_packages)
 
-packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(qt_packages_) $(wallet_packages_) $(upnp_packages_)
-native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages) $(qt_native_packages_)
+packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(avx2_packages_1) $(qt_packages_) $(wallet_packages_) $(upnp_packages_)
+native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages)
+
+ifneq ($(qt_packages_),)
+native_packages += $(qt_native_packages)
+endif
+
+ifneq ($(avx2_packages_1),)
+native_packages += $(avx2_native_packages)
+endif
+
 all_packages = $(packages) $(native_packages)
 
 meta_depends = Makefile funcs.mk builders/default.mk hosts/default.mk hosts/$(host_os).mk builders/$(build_os).mk
@@ -91,20 +116,44 @@ include funcs.mk
 
 toolchain_path=$($($(host_arch)_$(host_os)_native_toolchain)_prefixbin)
 final_build_id_long+=$(shell $(build_SHA256SUM) config.site.in)
-final_build_id+=$(shell echo -n $(final_build_id_long) | $(build_SHA256SUM) | cut -c-$(HASH_LENGTH))
-$(host_prefix)/.stamp_$(final_build_id): | $(native_packages) $(packages)
+final_build_id+=$(shell echo -n "$(final_build_id_long)" | $(build_SHA256SUM) | cut -c-$(HASH_LENGTH))
+$(host_prefix)/.stamp_$(final_build_id): $(native_packages) $(packages)
 	$(AT)rm -rf $(@D)
 	$(AT)mkdir -p $(@D)
-	$(AT)echo copying packages: $|
+	$(AT)echo copying packages: $^
 	$(AT)echo to: $(@D)
-	$(AT)cd $(@D); $(foreach package,$|, tar xf $($(package)_cached); )
+	$(AT)cd $(@D); $(foreach package,$^, tar xf $($(package)_cached); )
 	$(AT)touch $@
 
+# $PATH is not preserved between ./configure and make by convention. Its
+# modification and overriding at ./configure time is (as I understand it)
+# supposed to be captured by the AC_{PROG_{,OBJ}CXX,PATH_{PROG,TOOL}} macros,
+# which will expand the program names to their full absolute paths. The notable
+# exception is command line overriding: ./configure CC=clang, which skips the
+# program name expansion step, and works because the user implicitly indicates
+# with CC=clang that clang will be available in $PATH at all times, and is most
+# likely part of the user's system.
+#
+# Therefore, when we "seed the autoconf cache"/"override well-known program
+# vars" by setting AR=<blah> in our config.site, either one of two things needs
+# to be true for the build system to work correctly:
+#
+#   1. If we refer to the program by name (e.g. AR=riscv64-gnu-linux-ar), the
+#      tool needs to be available in $PATH at all times.
+#
+#   2. If the tool is _**not**_ expected to be available in $PATH at all times
+#      (such as is the case for our native_cctools binutils tools), it needs to
+#      be referred to by its absolute path, such as would be output by the
+#      AC_PATH_{PROG,TOOL} macros.
+#
+# Minor note: it is also okay to refer to tools by their absolute path even if
+# we expect them to be available in $PATH at all times, more specificity does
+# not hurt.
 $(host_prefix)/share/config.site : config.site.in $(host_prefix)/.stamp_$(final_build_id)
 	$(AT)@mkdir -p $(@D)
 	$(AT)sed -e 's|@HOST@|$(host)|' \
-            -e 's|@CC@|$(toolchain_path)$(host_CC)|' \
-            -e 's|@CXX@|$(toolchain_path)$(host_CXX)|' \
+            -e 's|@CC@|$(host_CC)|' \
+            -e 's|@CXX@|$(host_CXX)|' \
             -e 's|@AR@|$(toolchain_path)$(host_AR)|' \
             -e 's|@RANLIB@|$(toolchain_path)$(host_RANLIB)|' \
             -e 's|@NM@|$(toolchain_path)$(host_NM)|' \
@@ -122,8 +171,35 @@ $(host_prefix)/share/config.site : config.site.in $(host_prefix)/.stamp_$(final_
             $< > $@
 	$(AT)touch $@
 
-install: $(host_prefix)/share/config.site
-download-one: $(all_sources)
+
+define check_or_remove_cached
+  mkdir -p $(BASE_CACHE)/$(host)/$(package) && cd $(BASE_CACHE)/$(host)/$(package); \
+  $(build_SHA256SUM) -c $($(package)_cached_checksum) >/dev/null 2>/dev/null || \
+  ( rm -f $($(package)_cached_checksum); \
+    if test -f "$($(package)_cached)"; then echo "Checksum mismatch for $(package). Forcing rebuild.."; rm -f $($(package)_cached_checksum) $($(package)_cached); fi )
+endef
+
+define check_or_remove_sources
+  mkdir -p $($(package)_source_dir); cd $($(package)_source_dir); \
+  test -f $($(package)_fetched) && ( $(build_SHA256SUM) -c $($(package)_fetched) >/dev/null 2>/dev/null || \
+    ( echo "Checksum missing or mismatched for $(package) source. Forcing re-download."; \
+      rm -f $($(package)_all_sources) $($(1)_fetched))) || true
+endef
+
+check-packages:
+	@$(foreach package,$(all_packages),$(call check_or_remove_cached,$(package));)
+check-sources:
+	@$(foreach package,$(all_packages),$(call check_or_remove_sources,$(package));)
+
+$(host_prefix)/share/config.site: check-packages
+
+check-packages: check-sources
+
+install: check-packages $(host_prefix)/share/config.site
+
+
+download-one: check-sources $(all_sources)
+
 download-osx:
 	@$(MAKE) -s HOST=x86_64-apple-darwin11 download-one
 download-linux:
@@ -131,4 +207,5 @@ download-linux:
 download-win:
 	@$(MAKE) -s HOST=x86_64-w64-mingw32 download-one
 download: download-osx download-linux download-win
-.PHONY: install cached download-one download-osx download-linux download-win download
+
+.PHONY: install cached download-one download-osx download-linux download-win download check-packages check-sources

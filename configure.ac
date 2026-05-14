@@ -281,16 +281,32 @@ case $host in
          dnl the user (--without-wallet or --without-gui for example).
 
          openssl_prefix=`$BREW --prefix openssl 2>/dev/null`
-         bdb_prefix=`$BREW --prefix berkeley-db4 2>/dev/null`
+         #bdb_prefix=`$BREW --prefix berkeley-db4 2>/dev/null`
          qt5_prefix=`$BREW --prefix qt5 2>/dev/null`
          if test x$openssl_prefix != x; then
            PKG_CONFIG_PATH="$openssl_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
+		   #PKG_CONFIG_PATH="/opt/openssl/lib/pkgconfig:$PKG_CONFIG_PATH"
            export PKG_CONFIG_PATH
          fi
-         if test x$bdb_prefix != x; then
-           CPPFLAGS="$CPPFLAGS -I$bdb_prefix/include"
-           LIBS="$LIBS -L$bdb_prefix/lib"
+		 
+		 dnl test brew installed bdb if no BDB_CFLAGS or BDB_LIBS was given.
+         dnl currently tests, in order, for 5.x, 4.x and the default version
+         if test x$BDB_CFLAGS = x && test x$BDB_LIBS = x; then
+           for brew_bdb_version in '@5' '@4' ''; do
+             bdb_prefix=`$BREW --prefix berkeley-db${brew_bdb_version} 2>/dev/null`
+             if test x$bdb_prefix != x && test -d $bdb_prefix; then
+               BDB_CFLAGS="-I$bdb_prefix/include"
+               BDB_LIBS="-L$bdb_prefix/lib -ldb_cxx"
+               break
+             fi
+           done
          fi
+		 
+         #if test x$bdb_prefix != x; then
+           #CPPFLAGS="$CPPFLAGS -I$bdb_prefix/include"
+           #LIBS="$LIBS -L$bdb_prefix/lib"
+         #fi
+		 
          if test x$qt5_prefix != x; then
            PKG_CONFIG_PATH="$qt5_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
            export PKG_CONFIG_PATH
@@ -508,7 +524,8 @@ AC_SUBST(LIBMEMENV)
 
 if test x$enable_wallet != xno; then
     dnl Check for libdb_cxx only if wallet enabled
-    BITCOIN_FIND_BDB48
+    #BITCOIN_FIND_BDB48
+	BITCOIN_FIND_BDB53
 fi
 
 dnl Check for libminiupnpc (optional)
@@ -523,7 +540,7 @@ fi
 BITCOIN_QT_INIT
 
 dnl sets $bitcoin_enable_qt, $bitcoin_enable_qt_test, $bitcoin_enable_qt_dbus
-BITCOIN_QT_CONFIGURE([$use_pkgconfig], [qt4])
+BITCOIN_QT_CONFIGURE([$use_pkgconfig], [qt5])
 
 if test x$build_bitcoin_utils$build_bitcoind$bitcoin_enable_qt$use_tests = xnononono; then
     use_boost=no
@@ -533,48 +550,19 @@ fi
 
 if test x$use_boost = xyes; then
 
+dnl Minimum required Boost version
+define(MINIMUM_REQUIRED_BOOST, 1.60.0)
+
 dnl Check for boost libs
-AX_BOOST_BASE
+AX_BOOST_BASE([MINIMUM_REQUIRED_BOOST], AC_MSG_RESULT(ok), AC_MSG_ERROR(Need at least boost 1.60.0))
 AX_BOOST_SYSTEM
 AX_BOOST_FILESYSTEM
 AX_BOOST_PROGRAM_OPTIONS
 AX_BOOST_THREAD
 AX_BOOST_CHRONO
-
-
-if test x$use_reduce_exports != xno; then
-  AC_MSG_CHECKING([for working boost reduced exports])
-  TEMP_CPPFLAGS="$CPPFLAGS"
-  CPPFLAGS="$BOOST_CPPFLAGS $CPPFLAGS"
-  AC_PREPROC_IFELSE([AC_LANG_PROGRAM([[
-      @%:@include <boost/version.hpp>
-    ]], [[
-      #if BOOST_VERSION >= 104900
-      // Everything is okay
-      #else
-      #  error Boost version is too old
-      #endif
-    ]])],[
-      AC_MSG_RESULT(yes)
-    ],[:
-    if test x$use_reduce_exports = xauto; then
-      use_reduce_exports=no
-    else
-      if test x$use_reduce_exports = xyes; then
-        AC_MSG_ERROR([boost versions < 1.49 are known to be broken with reduced exports. Use --disable-reduced-exports.])
-      fi
-    fi
-    AC_MSG_RESULT(no)
-    AC_MSG_WARN([boost versions < 1.49 are known to have symbol visibility issues. Disabling reduced exports.])
-  ])
-  CPPFLAGS="$TEMP_CPPFLAGS"
 fi
 
-elif test x$use_reduce_exports = xauto; then
-    use_reduce_exports=yes
-fi
-
-if test x$use_reduce_exports != xno; then
+if test x$use_reduce_exports = xyes; then
     CXXFLAGS="$CXXFLAGS $RE_CXXFLAGS"
     AX_CHECK_LINK_FLAG([[-Wl,--exclude-libs,ALL]], [RELDFLAGS="-Wl,--exclude-libs,ALL"])
 fi
@@ -613,61 +601,7 @@ fi
 
 if test x$use_boost = xyes; then
 
-BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_PROGRAM_OPTIONS_LIB $BOOST_THREAD_LIB"
-
-dnl Boost >= 1.50 uses sleep_for rather than the now-deprecated sleep, however
-dnl it was broken from 1.50 to 1.52 when backed by nanosleep. Use sleep_for if
-dnl a working version is available, else fall back to sleep. sleep was removed
-dnl after 1.56.
-dnl If neither is available, abort.
-dnl If sleep_for is used, boost_chrono becomes a requirement.
-if test x$ax_cv_boost_chrono = xyes; then
-TEMP_LIBS="$LIBS"
-LIBS="$BOOST_LIBS $BOOST_CHRONO_LIB $LIBS"
-TEMP_CPPFLAGS="$CPPFLAGS"
-CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[
-  #include <boost/thread/thread.hpp>
-  #include <boost/version.hpp>
-  ]],[[
-  #if BOOST_VERSION >= 105000 && (!defined(BOOST_HAS_NANOSLEEP) || BOOST_VERSION >= 105200)
-      boost::this_thread::sleep_for(boost::chrono::milliseconds(0));
-  #else
-   choke me
-  #endif
-  ]])],
-  [boost_sleep=yes; BOOST_LIBS="$BOOST_LIBS $BOOST_CHRONO_LIB";
-     AC_DEFINE(HAVE_WORKING_BOOST_SLEEP_FOR, 1, [Define this symbol if boost sleep_for works])],
-  [boost_sleep=no])
-LIBS="$TEMP_LIBS"
-CPPFLAGS="$TEMP_CPPFLAGS"
-fi
-
-if test x$boost_sleep != xyes; then
-TEMP_LIBS="$LIBS"
-LIBS="$BOOST_LIBS $LIBS"
-TEMP_CPPFLAGS="$CPPFLAGS"
-CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[
-  #include <boost/version.hpp>
-  #include <boost/thread.hpp>
-  #include <boost/date_time/posix_time/posix_time_types.hpp>
-  ]],[[
-  #if BOOST_VERSION <= 105600
-      boost::this_thread::sleep(boost::posix_time::milliseconds(0));
-  #else
-   choke me
-  #endif
-  ]])],
-  [boost_sleep=yes; AC_DEFINE(HAVE_WORKING_BOOST_SLEEP, 1, [Define this symbol if boost sleep works])],
-  [boost_sleep=no])
-LIBS="$TEMP_LIBS"
-CPPFLAGS="$TEMP_CPPFLAGS"
-fi
-
-if test x$boost_sleep != xyes; then
-  AC_MSG_ERROR(No working boost sleep implementation found.)
-fi
+BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_PROGRAM_OPTIONS_LIB $BOOST_THREAD_LIB $BOOST_CHRONO_LIB"
 
 fi
 
@@ -703,35 +637,12 @@ else
   fi
 fi
 
-AC_CHECK_LIB([crypto],[RAND_egd],[],[
-  AC_ARG_WITH([libressl],
-    [AS_HELP_STRING([--with-libressl],[Build with system LibreSSL (default is no; DANGEROUS; NOT SUPPORTED)])],
-    [AC_MSG_WARN([Detected LibreSSL: This is NOT supported, and may break consensus compatibility!])],
-    [AC_MSG_ERROR([Detected LibreSSL: This is NOT supported, and may break consensus compatibility!])]
-  )
-])
-
-CFLAGS_TEMP="$CFLAGS"
+CXXFLAGS_TEMP="$CXXFLAGS"
 LIBS_TEMP="$LIBS"
-CFLAGS="$CFLAGS $SSL_CFLAGS $CRYPTO_CFLAGS"
+CXXFLAGS="$CXXFLAGS $SSL_CFLAGS $CRYPTO_CFLAGS"
 LIBS="$LIBS $SSL_LIBS $CRYPTO_LIBS"
 AC_CHECK_HEADER([openssl/ec.h],, AC_MSG_ERROR(OpenSSL ec header missing),)
-
-AC_MSG_CHECKING(for a supported OpenSSL version)
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[
-  #include <openssl/rand.h>
-  ]],
-  [[RAND_egd(NULL);]])],
-  [AC_MSG_RESULT(yes)],
-  [
-    AC_ARG_WITH([libressl],
-    [AS_HELP_STRING([--with-libressl],[Build with system LibreSSL (default is no; DANGEROUS; NOT SUPPORTED)])],
-    [AC_MSG_WARN([Detected LibreSSL: This is NOT supported, and may break consensus compatibility!])],
-    [AC_MSG_ERROR([Detected LibreSSL: This is NOT supported, and may break consensus compatibility!])]
-    )]
-)
-
-CFLAGS="$CFLAGS_TEMP"
+CXXFLAGS="$CXXFLAGS_TEMP"
 LIBS="$LIBS_TEMP"
 
 BITCOIN_QT_PATH_PROGS([PROTOC], [protoc],$protoc_bin_path)

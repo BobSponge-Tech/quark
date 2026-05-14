@@ -200,3 +200,76 @@ CLEANFILES = $(OSX_DMG) $(BITCOIN_WIN_INSTALLER)
 
 clean-local:
 	rm -rf test_bitcoin.coverage/ total.coverage/ $(OSX_APP)
+
+fullclean:
+	rm -rf test_bitcoin.coverage/ total.coverage/ $(OSX_APP)
+	rm -rf autom4te.cache
+	rm -f build-aux/{compile,config.guess,config.sub,depcomp,install-sh,ltmain.sh,missing,test-driver}
+	rm -f build-aux/m4/{libtool.m4,lt~obsolete.m4,ltoptions.m4,ltsugar.m4,ltversion.m4}
+	rm -f share/setup.nsi
+	-rm -f src/config.h
+	rm -rf src/.deps
+	rm src/*.a
+	rm -f src/leveldb/*/*.gcno leveldb/helpers/memenv/*.gcno
+	rm -rf src/compat/.deps
+	rm -f src/compat/.dirstamp
+	rm -f src/config/{bitcoin-config.h,bitcoin-config.h.in,bitcoin-config.h.in~}
+	rm -rf src/crypto/.deps
+	rm -f src/crypto/.dirstamp
+	rm src/crypto/*.a
+	rm -f src/obj/build.h
+	rm -rf src/primitives/.deps
+	rm -f src/primitives/.dirstamp
+	rm -rf src/qt/.deps
+	rm -f src/qt/.dirstamp
+	rm -rf src/qt/test/.deps
+	rm -f src/qt/test/.dirstamp
+	rm -rf src/script/.deps
+	rm -f src/script/.dirstamp
+	rm -rf src/secp256k1/{.deps,autom4te.cache}
+	rm -f src/secp256k1/src/libsecp256k1-config.h
+	rm -rf src/test/.deps
+	rm -f src/test/.dirstamp
+	rm -rf src/univalue/.deps
+	rm -f src/univalue/.dirstamp
+	rm src/univalue/*.a
+	rm -f src/secp256k1/{aclocal.m4,config.log,config.status,configure,configure~,libtool,Makefile,Makefile.in}
+	rm -f src/{Makefile,Makefile.in}
+	rm -f {aclocal.m4,config.log,config.status,configure,configure~,libtool,Makefile,Makefile.in}
+
+completeclean:
+	rm -rf test_bitcoin.coverage/ total.coverage/ $(OSX_APP)
+	rm -rf autom4te.cache
+	rm -f build-aux/{compile,config.guess,config.sub,depcomp,install-sh,ltmain.sh,missing,test-driver}
+	rm -f build-aux/m4/{libtool.m4,lt~obsolete.m4,ltoptions.m4,ltsugar.m4,ltversion.m4}
+	rm -f share/setup.nsi
+	-rm -f src/config.h
+	rm -rf src/.deps
+	rm src/*.a
+	rm -f src/leveldb/*/*.gcno leveldb/helpers/memenv/*.gcno
+	rm -rf src/compat/.deps
+	rm -f src/compat/.dirstamp
+	rm -f src/config/{bitcoin-config.h,bitcoin-config.h.in,bitcoin-config.h.in~}
+	rm -rf src/crypto/.deps
+	rm -f src/crypto/.dirstamp
+	rm src/crypto/*.a
+	rm -f src/obj/build.h
+	rm -rf src/primitives/.deps
+	rm -f src/primitives/.dirstamp
+	rm -rf src/qt/.deps
+	rm -f src/qt/.dirstamp
+	rm -rf src/qt/test/.deps
+	rm -f src/qt/test/.dirstamp
+	rm -rf src/script/.deps
+	rm -f src/script/.dirstamp
+	rm -rf src/secp256k1/{.deps,autom4te.cache}
+	rm -f src/secp256k1/src/libsecp256k1-config.h
+	rm -rf src/test/.deps
+	rm -f src/test/.dirstamp
+	rm -rf src/univalue/.deps
+	rm -f src/univalue/.dirstamp
+	rm src/univalue/*.a
+	rm -rf depends/{built,sources,work,i686-pc-linux-gnu,x86_64-pc-linux-gnu,i686-w64-mingw32,x86_64-w64-mingw32,i686-apple-darwin,x86_64-apple-darwin}
+	rm -f src/secp256k1/{aclocal.m4,config.log,config.status,configure,configure~,libtool,Makefile,Makefile.in}
+	rm -f src/{Makefile,Makefile.in}
+	rm -f {aclocal.m4,config.log,config.status,configure,configure~,libtool,Makefile,Makefile.in}
