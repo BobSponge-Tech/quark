@@ -492,9 +492,12 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol, SocketA
                    const bool fUseSSL)
 {
     // Accept connection
-    //boost::shared_ptr< AcceptedConnectionImpl<Protocol> > conn(new AcceptedConnectionImpl<Protocol>(acceptor->get_io_service(), context, fUseSSL));
+#if BOOST_VERSION <= 106500
+    boost::shared_ptr< AcceptedConnectionImpl<Protocol> > conn(new AcceptedConnectionImpl<Protocol>(acceptor->get_io_service(), context, fUseSSL));
     //boost::shared_ptr< AcceptedConnectionImpl<Protocol> > conn(new AcceptedConnectionImpl<Protocol>((boost::asio::io_context&)(acceptor->get_executor().context()), context, fUseSSL));
+#else
     boost::shared_ptr< AcceptedConnectionImpl<Protocol> > conn(new AcceptedConnectionImpl<Protocol>(reinterpret_cast<boost::asio::io_context&>(acceptor->get_executor().context()), context, fUseSSL));
+#endif
     acceptor->async_accept(
             conn->sslStream.lowest_layer(),
             conn->peer,

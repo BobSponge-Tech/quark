@@ -34,7 +34,9 @@
 #include <boost/thread.hpp>
 
 using namespace boost;
+#if BOOST_VERSION >= 107300
 using namespace boost::placeholders;
+#endif
 using namespace std;
 
 #if defined(NDEBUG)

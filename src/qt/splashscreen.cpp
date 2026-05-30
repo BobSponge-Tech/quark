@@ -20,7 +20,9 @@
 #include <QDesktopWidget>
 #include <QPainter>
 
+#if BOOST_VERSION >= 107300
 using namespace boost::placeholders;
+#endif
 
 SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) :
     QWidget(0, f), curAlignment(0)

@@ -22,7 +22,9 @@
 #include <QDebug>
 #include <QTimer>
 
+#if BOOST_VERSION >= 107300
 using namespace boost::placeholders;
+#endif
 
 static const int64_t nClientStartupTime = GetTime();
 

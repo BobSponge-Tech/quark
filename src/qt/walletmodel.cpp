@@ -24,7 +24,9 @@
 #include <QSet>
 #include <QTimer>
 
+#if BOOST_VERSION >= 107300
 using namespace boost::placeholders;
+#endif
 using namespace std;
 
 WalletModel::WalletModel(CWallet *wallet, OptionsModel *optionsModel, QObject *parent) :

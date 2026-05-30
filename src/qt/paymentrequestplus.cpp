@@ -160,17 +160,32 @@ bool PaymentRequestPlus::getMerchant(X509_STORE* certStore, QString& merchant) c
         std::string data_to_verify;                     // Everything but the signature
         rcopy.SerializeToString(&data_to_verify);
 
-        //EVP_MD_CTX ctx;
-		EVP_MD_CTX *ctx;
+		#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+			EVP_MD_CTX *ctx;
+		#else
+			EVP_MD_CTX ctx;
+		#endif
         EVP_PKEY *pubkey = X509_get_pubkey(signing_cert);
-        //EVP_MD_CTX_init(&ctx);
-		ctx = EVP_MD_CTX_new();
+		#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+			ctx = EVP_MD_CTX_new();
+		#else
+			EVP_MD_CTX_init(&ctx);
+		#endif
+		#if OPENSSL_VERSION_NUMBER >= 0x10100000L
         if (!EVP_VerifyInit_ex(ctx, digestAlgorithm, NULL) ||
             !EVP_VerifyUpdate(ctx, data_to_verify.data(), data_to_verify.size()) ||
             !EVP_VerifyFinal(ctx, (const unsigned char*)paymentRequest.signature().data(), paymentRequest.signature().size(), pubkey)) {
 
             throw SSLVerifyError("Bad signature, invalid PaymentRequest.");
         }
+		#else
+		if (!EVP_VerifyInit_ex(&ctx, digestAlgorithm, NULL) ||
+            !EVP_VerifyUpdate(&ctx, data_to_verify.data(), data_to_verify.size()) ||
+            !EVP_VerifyFinal(&ctx, (const unsigned char*)paymentRequest.signature().data(), paymentRequest.signature().size(), pubkey)) {
+
+            throw SSLVerifyError("Bad signature, invalid PaymentRequest.");
+        }
+		#endif
 
         // OpenSSL API for getting human printable strings from certs is baroque.
         int textlen = X509_NAME_get_text_by_NID(certname, NID_commonName, NULL, 0);

@@ -44,7 +44,11 @@ public:
         bn = BN_new ();
         if (!BN_copy(bn, b.bn))
         {
-            BN_free(bn); bn = nullptr;
+			#if OPENSSL_VERSION_NUMBER >= 0x10101000L
+				BN_free(bn); bn = nullptr;
+			#else
+				BN_free(bn); bn = NULL;
+			#endif
             throw bignum_error("CBigNum::CBigNum(const CBigNum&) : BN_copy failed");
         }
     }

@@ -24,7 +24,9 @@
 #include <QIcon>
 #include <QList>
 
+#if BOOST_VERSION >= 107300
 using namespace boost::placeholders;
+#endif
 
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {

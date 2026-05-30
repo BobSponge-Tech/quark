@@ -266,16 +266,22 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, TransactionReco
     strHTML += "<b>" + tr("Transaction ID") + ":</b> " + TransactionRecord::formatSubTxId(wtx.GetHash(), rec->idx) + "<br>";
 
     // Message from normal quark:URI (quark:123...?message=example)
-    //foreach (const PAIRTYPE(string, string)& r, wtx.vOrderForm)
+#if QT_VERSION <= 0x050600
+    foreach (const PAIRTYPE(string, string)& r, wtx.vOrderForm)
+#else
 	for (const PAIRTYPE(std::string, std::string)& r : wtx.vOrderForm)
+#endif
         if (r.first == "Message")
             strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(r.second, true) + "<br>";
 
     //
     // PaymentRequest info:
     //
-    //foreach (const PAIRTYPE(string, string)& r, wtx.vOrderForm)
+#if QT_VERSION <= 0x050600
+    foreach (const PAIRTYPE(string, string)& r, wtx.vOrderForm)
+#else
 	for (const PAIRTYPE(std::string, std::string)& r : wtx.vOrderForm)
+#endif
     {
         if (r.first == "PaymentRequest")
         {

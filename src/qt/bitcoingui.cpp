@@ -58,7 +58,9 @@
 #include <QUrlQuery>
 #endif
 
+#if BOOST_VERSION >= 107300
 using namespace boost::placeholders;
+#endif
 
 const QString BitcoinGUI::DEFAULT_WALLET = "~Default";
 
