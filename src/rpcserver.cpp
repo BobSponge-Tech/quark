@@ -17,6 +17,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/asio/deadline_timer.hpp>
 #include <boost/bind.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/foreach.hpp>
@@ -39,11 +40,19 @@ static std::string rpcWarmupStatus("RPC server started");
 static CCriticalSection cs_rpcWarmup;
 
 //! These are created by StartRPCThreads, destroyed in StopRPCThreads
+#if BOOST_VERSION >= 108700
+static asio::io_context* rpc_io_service = nullptr; // Or use nullptr in modern C++
+#else
 static asio::io_service* rpc_io_service = NULL;
+#endif
 static map<string, boost::shared_ptr<deadline_timer> > deadlineTimers;
 static ssl::context* rpc_ssl_context = NULL;
 static boost::thread_group* rpc_worker_group = NULL;
+#if BOOST_VERSION >= 108700
+static std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> rpc_dummy_work = NULL;
+#else
 static boost::asio::io_service::work *rpc_dummy_work = NULL;
+#endif
 static std::vector<CSubNet> rpc_allow_subnets; //!< List of subnets to allow RPC connections from
 static std::vector< boost::shared_ptr<ip::tcp::acceptor> > rpc_acceptors;
 
@@ -409,10 +418,16 @@ CNetAddr BoostAsioToCNetAddr(boost::asio::ip::address address)
 {
     CNetAddr netaddr;
     // Make sure that IPv4-compatible and IPv4-mapped IPv6 addresses are treated as IPv4 addresses
+#if BOOST_VERSION >= 108700
+	if (address.is_v6()
+      && address.to_v6().is_v4_mapped())
+		address = boost::asio::ip::make_address_v4(boost::asio::ip::v4_mapped, address.to_v6());
+#else
     if (address.is_v6()
      && (address.to_v6().is_v4_compatible()
       || address.to_v6().is_v4_mapped()))
         address = address.to_v6().to_v4();
+#endif
 
     if(address.is_v4())
     {
@@ -441,7 +456,11 @@ class AcceptedConnectionImpl : public AcceptedConnection
 {
 public:
     AcceptedConnectionImpl(
-            asio::io_service& io_service,
+#if BOOST_VERSION >= 108700
+            asio::io_context& io_service,
+#else
+			asio::io_service& io_service,
+#endif
             ssl::context &context,
             bool fUseSSL) :
         sslStream(io_service, context),
@@ -552,7 +571,11 @@ static ip::tcp::endpoint ParseEndpoint(const std::string &strEndpoint, int defau
     std::string addr;
     int port = defaultPort;
     SplitHostPort(strEndpoint, port, addr);
-    return ip::tcp::endpoint(asio::ip::address::from_string(addr), port);
+#if BOOST_VERSION >= 108700
+    return ip::tcp::endpoint(boost::asio::ip::make_address(addr), port);
+#else
+	return ip::tcp::endpoint(asio::ip::address::from_string(addr), port);
+#endif
 }
 
 void StartRPCThreads()
@@ -607,7 +630,11 @@ void StartRPCThreads()
     }
 
     assert(rpc_io_service == NULL);
-    rpc_io_service = new asio::io_service();
+#if BOOST_VERSION >= 108700
+    rpc_io_service = new asio::io_context();
+#else
+	rpc_io_service = new asio::io_service();
+#endif
     //rpc_ssl_context = new ssl::context(*rpc_io_service, ssl::context::sslv23);
     rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
@@ -688,7 +715,11 @@ void StartRPCThreads()
                 !bBindAny || bindAddress != asio::ip::address_v6::any()), v6_only_error);
 
             acceptor->bind(endpoint);
+#if BOOST_VERSION >= 108700
+			acceptor->listen(boost::asio::socket_base::max_listen_connections);
+#else
             acceptor->listen(socket_base::max_connections);
+#endif
 
             RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
 
@@ -713,7 +744,11 @@ void StartRPCThreads()
 
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
-        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+#if BOOST_VERSION >= 108700
+        rpc_worker_group->create_thread(boost::bind(&asio::io_context::run, rpc_io_service));
+#else
+		rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+#endif
     fRPCRunning = true;
 }
 
@@ -721,12 +756,24 @@ void StartDummyRPCThread()
 {
     if(rpc_io_service == NULL)
     {
-        rpc_io_service = new asio::io_service();
+#if BOOST_VERSION >= 108700
+        rpc_io_service = new asio::io_context();
+#else
+		rpc_io_service = new asio::io_service();
+#endif
         /* Create dummy "work" to keep the thread from exiting when no timeouts active,
          * see http://www.boost.org/doc/libs/1_51_0/doc/html/boost_asio/reference/io_service.html#boost_asio.reference.io_service.stopping_the_io_service_from_running_out_of_work */
-        rpc_dummy_work = new asio::io_service::work(*rpc_io_service);
+#if BOOST_VERSION >= 108700
+		auto rpc_dummy_work = asio::make_work_guard(*rpc_io_service);
+#else
+		rpc_dummy_work = new asio::io_service::work(*rpc_io_service);
+#endif
         rpc_worker_group = new boost::thread_group();
+#if BOOST_VERSION >= 108700
+		rpc_worker_group->create_thread(boost::bind(&asio::io_context::run, rpc_io_service));
+#else
         rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+#endif
         fRPCRunning = true;
     }
 }
@@ -760,7 +807,11 @@ void StopRPCThreads()
     cvBlockChange.notify_all();
     if (rpc_worker_group != NULL)
         rpc_worker_group->join_all();
+#if BOOST_VERSION >= 108700
+	rpc_dummy_work.reset();
+#else
     delete rpc_dummy_work; rpc_dummy_work = NULL;
+#endif
     delete rpc_worker_group; rpc_worker_group = NULL;
     delete rpc_ssl_context; rpc_ssl_context = NULL;
     delete rpc_io_service; rpc_io_service = NULL;

@@ -467,7 +467,11 @@ void ClearDatadirCache()
 boost::filesystem::path GetConfigFile()
 {
     boost::filesystem::path pathConfigFile(GetArg("-conf", "quarkcoin.conf"));
+#if BOOST_VERSION >= 108500
+	if (!pathConfigFile.is_absolute())
+#else
     if (!pathConfigFile.is_complete())
+#endif
         pathConfigFile = GetDataDir(false) / pathConfigFile;
 
     return pathConfigFile;
@@ -476,7 +480,11 @@ boost::filesystem::path GetConfigFile()
 boost::filesystem::path GetMasternodeConfigFile()
 {
     boost::filesystem::path pathConfigFile(GetArg("-mnconf", "masternode.conf"));
+#if BOOST_VERSION >= 108500
+	if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir() / pathConfigFile;
+#else
     if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir() / pathConfigFile;
+#endif
     return pathConfigFile;
 }
 
@@ -515,7 +523,11 @@ void ReadConfigFile(map<string, string>& mapSettingsRet,
 boost::filesystem::path GetPidFile()
 {
     boost::filesystem::path pathPidFile(GetArg("-pid", "quarkd.pid"));
+#if BOOST_VERSION >= 108500
+	if (!pathPidFile.is_absolute()) pathPidFile = GetDataDir() / pathPidFile;
+#else
     if (!pathPidFile.is_complete()) pathPidFile = GetDataDir() / pathPidFile;
+#endif
     return pathPidFile;
 }
 
