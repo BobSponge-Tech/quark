@@ -222,6 +222,7 @@ fullclean:
 	rm -f src/primitives/.dirstamp
 	rm -rf src/qt/.deps
 	rm -f src/qt/.dirstamp
+	rm -f src/qt/libquarkqt.a
 	rm -rf src/qt/test/.deps
 	rm -f src/qt/test/.dirstamp
 	rm -rf src/script/.deps
@@ -258,6 +259,7 @@ completeclean:
 	rm -f src/primitives/.dirstamp
 	rm -rf src/qt/.deps
 	rm -f src/qt/.dirstamp
+	rm -f src/qt/libquarkqt.a
 	rm -rf src/qt/test/.deps
 	rm -f src/qt/test/.dirstamp
 	rm -rf src/script/.deps
