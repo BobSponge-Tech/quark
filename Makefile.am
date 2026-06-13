@@ -243,6 +243,7 @@ completeclean:
 	rm -rf autom4te.cache
 	rm -f build-aux/{compile,config.guess,config.sub,depcomp,install-sh,ltmain.sh,missing,test-driver}
 	rm -f build-aux/m4/{libtool.m4,lt~obsolete.m4,ltoptions.m4,ltsugar.m4,ltversion.m4}
+	rm -rf dist
 	rm -f share/setup.nsi
 	-rm -f src/config.h
 	rm -rf src/.deps
