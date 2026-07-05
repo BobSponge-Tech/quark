@@ -124,15 +124,9 @@ public:
         }
 #else
 		boost::asio::ip::tcp::resolver resolver(stream.get_executor());
-		auto results = resolver.resolve(server.c_str(), port.c_str());
-        boost::system::error_code error = boost::asio::error::host_not_found;
-        for (auto endpoint : results)
-        {
-            stream.lowest_layer().close();
-            stream.lowest_layer().connect(endpoint, error);
-            if (!error)
-                break;
-        }
+		auto endpoints = resolver.resolve(server, port);
+		boost::system::error_code error;
+		boost::asio::connect(stream.lowest_layer(), endpoints, error);
 #endif
         if (error)
             return false;
